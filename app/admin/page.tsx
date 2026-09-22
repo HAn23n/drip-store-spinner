@@ -177,7 +177,7 @@ export default function AdminPage() {
           <button className="btn btn-gold" type="submit" disabled={loginBusy || !password} style={{ width: "100%" }}>
             {loginBusy ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
           </button>
-          <p className="error">{loginError}</p>
+          <p className="error" role="alert" aria-live="assertive">{loginError}</p>
         </form>
       </main>
     );
@@ -202,6 +202,8 @@ export default function AdminPage() {
         <p>แก้ชื่อ คำอธิบาย สี และโอกาสออกเป็น % ของแต่ละช่องได้ โอกาสรวมทุกช่องต้องเท่ากับ 100% พอดี</p>
         <p
           className="store-note"
+          role="status"
+          aria-live="polite"
           style={{ color: totalOk ? "var(--leaf)" : "var(--cherry)", opacity: 1, fontWeight: 600 }}
         >
           โอกาสรวม {totalPct}% {totalOk ? "✓ ครบ 100%" : totalPct > 100 ? `(เกิน ${totalPct - 100}%)` : `(ขาดอีก ${100 - totalPct}%)`}
@@ -291,7 +293,9 @@ export default function AdminPage() {
           รีเซ็ตกลับค่าเริ่มต้น
         </button>
       </div>
-      <p className={"saved-note" + (savedNote ? " show" : "")}>{savedNote}</p>
+      <p className={"saved-note" + (savedNote ? " show" : "")} role="status" aria-live="polite">
+        {savedNote}
+      </p>
     </main>
   );
 }

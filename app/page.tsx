@@ -27,6 +27,7 @@ export default function WheelPage() {
   const spinRAFRef = useRef<number | null>(null);
   const spinLastTsRef = useRef(0);
   const modalCloseRef = useRef<HTMLButtonElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const spinBtnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -162,6 +163,35 @@ export default function WheelPage() {
     spinBtnRef.current?.focus();
   }
 
+  // Trap focus inside the result modal while it is open: Tab/Shift+Tab cycle
+  // only through the modal's own focusable elements, and Escape closes it.
+  useEffect(() => {
+    if (!modal) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        closeModal();
+        return;
+      }
+      if (e.key !== "Tab" || !modalRef.current) return;
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal]);
+
   return (
     <main className="screen active" id="screen-wheel">
       <div className="topbar">
@@ -208,12 +238,18 @@ export default function WheelPage() {
 
       <p className="foot">แคปหน้าจอผลรางวัลแสดงพนักงานหน้าร้านเพื่อรับสิทธิ์</p>
 
-      <div className={"overlay" + (modal ? " show" : "")} role="dialog" aria-modal="true">
-        <div className="modal">
+      <div
+        className={"overlay" + (modal ? " show" : "")}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mPrize"
+        aria-describedby="mDesc"
+      >
+        <div className="modal" ref={modalRef}>
           <div className="emo">{modal?.color === "leaf" ? "☕️" : "🎉"}</div>
           <p className="cap">คุณได้รับ</p>
-          <p className="prize">{modal?.label ?? "—"}</p>
-          <p className="desc">{modal?.description || "แคปหน้าจอนี้แสดงพนักงานเพื่อรับสิทธิ์"}</p>
+          <p className="prize" id="mPrize">{modal?.label ?? "—"}</p>
+          <p className="desc" id="mDesc">{modal?.description || "แคปหน้าจอนี้แสดงพนักงานเพื่อรับสิทธิ์"}</p>
           <button
             ref={modalCloseRef}
             className="btn btn-gold"
