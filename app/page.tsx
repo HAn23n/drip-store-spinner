@@ -55,6 +55,13 @@ export default function WheelPage() {
     setBtnLabel("หมุนวงล้อ");
     const p = prizesRef.current[idx];
     setModal(p);
+    // Fire-and-forget: log the result for the shop owner's history page.
+    // A failure here (e.g. offline) shouldn't affect the spin itself.
+    fetch("/api/spins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: p.label, description: p.description }),
+    }).catch(() => {});
   }, []);
 
   const stopSpin = useCallback(() => {

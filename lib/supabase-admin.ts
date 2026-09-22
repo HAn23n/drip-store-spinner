@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 const TABLE = "wheel_prizes";
+const SPIN_HISTORY = "spin_history";
 
 function envOrThrow(name: string): string {
   const v = process.env[name];
@@ -20,8 +21,8 @@ export function supabaseReadClient() {
   });
 }
 
-// service_role client — bypasses RLS. Only ever used inside password-checked
-// API routes, never sent to the browser.
+// service_role client — bypasses RLS. Only ever used inside API routes,
+// never sent to the browser.
 export function supabaseWriteClient() {
   return createClient(envOrThrow("SUPABASE_URL"), envOrThrow("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false },
@@ -29,3 +30,4 @@ export function supabaseWriteClient() {
 }
 
 export const WHEEL_TABLE = TABLE;
+export const SPIN_HISTORY_TABLE = SPIN_HISTORY;

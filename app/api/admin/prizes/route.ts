@@ -1,24 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasSupabaseConfig, supabaseReadClient, supabaseWriteClient, WHEEL_TABLE } from "@/lib/supabase-admin";
+import { hasSupabaseConfig, supabaseWriteClient, WHEEL_TABLE } from "@/lib/supabase-admin";
 import { DEFAULTS, normalizePrizes, weightSum } from "@/lib/wheel-shared";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
-// Both routes below require the admin session cookie — enforced by middleware.ts.
+const NO_STORE = { headers: { "Cache-Control": "no-store, max-age=0" } };
 
 export async function GET() {
   if (!hasSupabaseConfig()) {
-    return NextResponse.json({ prizes: normalizePrizes(DEFAULTS), source: "fallback" });
+    return NextResponse.json({ prizes: normalizePrizes(DEFAULTS), source: "fallback" }, NO_STORE);
   }
-  const { data, error } = await supabaseReadClient()
+  const { data, error } = await supabaseWriteClient()
     .from(WHEEL_TABLE)
     .select("*")
     .order("sort_order", { ascending: true });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502 });
+    return NextResponse.json({ error: error.message }, { status: 502, ...NO_STORE });
   }
   const prizes = data && data.length > 0 ? normalizePrizes(data) : normalizePrizes(DEFAULTS);
-  return NextResponse.json({ prizes, source: data && data.length > 0 ? "supabase" : "fallback" });
+  return NextResponse.json({ prizes, source: data && data.length > 0 ? "supabase" : "fallback" }, NO_STORE);
 }
 
 export async function PUT(req: NextRequest) {
@@ -64,5 +66,5 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "บันทึกไม่สำเร็จ: " + insErr.message }, { status: 502 });
   }
 
-  return NextResponse.json({ prizes: clean, source: "supabase" });
+  return NextResponse.json({ prizes: clean, source: "supabase" }, NO_STORE);
 }

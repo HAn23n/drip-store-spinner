@@ -47,6 +47,74 @@ export function weightSum(list: Prize[]): number {
   return list.reduce((s, p) => s + (Number(p.weight) || 0), 0);
 }
 
+// Splits `target` across `weights` proportionally, using the largest-remainder
+// method so the result is whole numbers, each at least 1, summing to exactly
+// `target`.
+function distributeProportional(weights: number[], target: number): number[] {
+  const n = weights.length;
+  if (n === 0) return [];
+  const sum = weights.reduce((s, w) => s + w, 0);
+  const shares = weights.map((w) => {
+    const raw = sum > 0 ? (w / sum) * target : target / n;
+    return { floor: Math.max(1, Math.floor(raw)), frac: raw - Math.floor(raw) };
+  });
+
+  let leftover = target - shares.reduce((s, x) => s + x.floor, 0);
+
+  const byFracDesc = shares.map((_, i) => i).sort((a, b) => shares[b].frac - shares[a].frac);
+  for (let k = 0; leftover > 0 && byFracDesc.length; k++) {
+    shares[byFracDesc[k % byFracDesc.length]].floor += 1;
+    leftover--;
+  }
+
+  const byValDesc = shares.map((_, i) => i).sort((a, b) => shares[b].floor - shares[a].floor);
+  for (let k = 0; leftover < 0 && k < byValDesc.length * 200; k++) {
+    const idx = byValDesc[k % byValDesc.length];
+    if (shares[idx].floor > 1) {
+      shares[idx].floor -= 1;
+      leftover++;
+    }
+  }
+
+  return shares.map((s) => s.floor);
+}
+
+// Sets row `changedIndex` to `rawValue` and shrinks/grows every other row
+// proportionally so the whole list keeps summing to exactly 100%.
+export function rebalanceWeights(list: Prize[], changedIndex: number, rawValue: number): Prize[] {
+  const n = list.length;
+  if (n <= 1) return list.map((p) => ({ ...p, weight: 100 }));
+
+  const otherIdx = list.map((_, i) => i).filter((i) => i !== changedIndex);
+  const maxForChanged = 100 - otherIdx.length; // leave at least 1% for every other row
+  const changedValue = Math.max(1, Math.min(maxForChanged, Math.round(rawValue) || 1));
+  const remaining = 100 - changedValue;
+
+  const distributed = distributeProportional(
+    otherIdx.map((i) => list[i].weight),
+    remaining
+  );
+
+  const weights = list.map((p) => p.weight);
+  weights[changedIndex] = changedValue;
+  otherIdx.forEach((i, k) => {
+    weights[i] = distributed[k];
+  });
+
+  return list.map((p, i) => ({ ...p, weight: weights[i] }));
+}
+
+// Scales every row proportionally so the list sums to exactly 100% — used
+// after adding or removing a row.
+export function normalizeWeightsTo100(list: Prize[]): Prize[] {
+  if (list.length === 0) return list;
+  const distributed = distributeProportional(
+    list.map((p) => p.weight),
+    100
+  );
+  return list.map((p, i) => ({ ...p, weight: distributed[i] }));
+}
+
 // SVG coordinate system (viewBox 300x300), matches the original prototype.
 export const WHEEL_R = 145;
 export const WHEEL_C = 150;

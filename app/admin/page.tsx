@@ -1,15 +1,20 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { DEFAULTS, PALETTE, Prize, PrizeColor, normalizePrizes, renderWheel, weightSum } from "@/lib/wheel-shared";
+import {
+  DEFAULTS,
+  PALETTE,
+  Prize,
+  PrizeColor,
+  normalizePrizes,
+  normalizeWeightsTo100,
+  rebalanceWeights,
+  renderWheel,
+  weightSum,
+} from "@/lib/wheel-shared";
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState<boolean | null>(null); // null = still checking
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginBusy, setLoginBusy] = useState(false);
-
   const [draft, setDraft] = useState<Prize[]>([]);
   const [loading, setLoading] = useState(true);
   const [storeNote, setStoreNote] = useState("");
@@ -24,63 +29,44 @@ export default function AdminPage() {
     );
   }, []);
 
-  const loadPrizes = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/prizes", { cache: "no-store" });
-      if (res.status === 401) {
-        setAuthed(false);
-        return;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/prizes", { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        setDraft(data.prizes ?? []);
+        setStoreNote(
+          data.source === "supabase"
+            ? "เชื่อมต่อ Supabase แล้ว การแก้ไขจะเห็นตรงกันทุกเครื่อง"
+            : "ยังไม่ได้ตั้งค่า Supabase (หรือยังไม่มีข้อมูล) — บันทึกจะไม่ถูกเก็บถาวร"
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      const data = await res.json();
-      setAuthed(true);
-      setDraft(data.prizes ?? []);
-      setStoreNote(
-        data.source === "supabase"
-          ? "เชื่อมต่อ Supabase แล้ว การแก้ไขจะเห็นตรงกันทุกเครื่อง"
-          : "ยังไม่ได้ตั้งค่า Supabase (หรือยังไม่มีข้อมูล) — บันทึกจะไม่ถูกเก็บถาวร"
-      );
-    } finally {
-      setLoading(false);
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    loadPrizes();
-  }, [loadPrizes]);
-
-  useEffect(() => {
-    if (authed) redrawPreview(draft);
-  }, [authed, draft, redrawPreview]);
-
-  async function submitLogin(e: FormEvent) {
-    e.preventDefault();
-    setLoginBusy(true);
-    setLoginError("");
-    try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setLoginError(data.error || "เข้าสู่ระบบไม่สำเร็จ");
-        return;
-      }
-      setPassword("");
-      await loadPrizes();
-    } finally {
-      setLoginBusy(false);
-    }
-  }
+    redrawPreview(draft);
+  }, [draft, redrawPreview]);
 
   function updateField(i: number, key: keyof Prize, value: string) {
     setDraft((prev) => {
       const next = prev.slice();
       const row = { ...next[i] } as Prize;
       if (key === "weight") {
-        row.weight = Math.max(1, Math.min(100, Number(value) || 1));
+        // Keep only digits and let the field go empty (weight 0) while the
+        // owner is mid-typing — don't force it back to 1 on every keystroke,
+        // that's what made clearing the field to type a new number fight back.
+        // The 1-100 floor/ceiling and rebalance only run once they leave the
+        // field, in commitWeight below.
+        const digits = value.replace(/[^0-9]/g, "").slice(0, 3);
+        row.weight = digits === "" ? 0 : Math.min(999, parseInt(digits, 10));
       } else if (key === "color") {
         row.color = value as PrizeColor;
       } else if (key === "label") {
@@ -93,8 +79,20 @@ export default function AdminPage() {
     });
   }
 
+  // Runs once the shop owner leaves the % field (not on every keystroke, so
+  // typing a multi-digit number doesn't get interrupted): shrinks/grows every
+  // other row proportionally so the list still sums to exactly 100%.
+  function commitWeight(i: number) {
+    setDraft((prev) => rebalanceWeights(prev, i, prev[i].weight || 1));
+  }
+
   function addRow() {
-    setDraft((prev) => [...prev, { label: "รางวัลใหม่", description: "", color: "espresso", weight: 1, sort_order: prev.length }]);
+    setDraft((prev) =>
+      normalizeWeightsTo100([
+        ...prev,
+        { label: "รางวัลใหม่", description: "", color: "espresso", weight: 1, sort_order: prev.length },
+      ])
+    );
   }
 
   function deleteRow(i: number) {
@@ -102,7 +100,7 @@ export default function AdminPage() {
       alert("ต้องเหลืออย่างน้อย 2 ช่อง");
       return;
     }
-    setDraft((prev) => prev.filter((_, idx) => idx !== i));
+    setDraft((prev) => normalizeWeightsTo100(prev.filter((_, idx) => idx !== i)));
   }
 
   function resetToDefaults() {
@@ -128,10 +126,6 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prizes: clean }),
       });
-      if (res.status === 401) {
-        setAuthed(false);
-        return;
-      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
       setDraft(data.prizes);
@@ -144,41 +138,10 @@ export default function AdminPage() {
     }
   }
 
-  async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
-    setAuthed(false);
-    setDraft([]);
-  }
-
-  if (authed === null || (authed && loading)) {
+  if (loading) {
     return (
       <main className="screen active">
         <p className="sub">กำลังโหลด…</p>
-      </main>
-    );
-  }
-
-  if (!authed) {
-    return (
-      <main className="screen active login-wrap">
-        <h2>เข้าสู่ระบบแก้ไขวงล้อ</h2>
-        <form onSubmit={submitLogin}>
-          <div className="field">
-            <label htmlFor="password">รหัสผ่าน</label>
-            <input
-              id="password"
-              type="password"
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </div>
-          <button className="btn btn-gold" type="submit" disabled={loginBusy || !password} style={{ width: "100%" }}>
-            {loginBusy ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
-          </button>
-          <p className="error" role="alert" aria-live="assertive">{loginError}</p>
-        </form>
       </main>
     );
   }
@@ -199,7 +162,7 @@ export default function AdminPage() {
 
       <div className="admin-head">
         <h2>รายการรางวัล</h2>
-        <p>แก้ชื่อ คำอธิบาย สี และโอกาสออกเป็น % ของแต่ละช่องได้ โอกาสรวมทุกช่องต้องเท่ากับ 100% พอดี</p>
+        <p>แก้ชื่อ คำอธิบาย สี และโอกาสออกเป็น % ของแต่ละช่องได้ แก้ช่องไหน ช่องอื่นจะปรับให้รวมกันเป็น 100% เสมอ</p>
         <p
           className="store-note"
           role="status"
@@ -208,16 +171,11 @@ export default function AdminPage() {
         >
           โอกาสรวม {totalPct}% {totalOk ? "✓ ครบ 100%" : totalPct > 100 ? `(เกิน ${totalPct - 100}%)` : `(ขาดอีก ${100 - totalPct}%)`}
         </p>
+        <p className="store-note">{storeNote}</p>
         <p className="store-note">
-          {storeNote}
-          {" · "}
-          <button
-            type="button"
-            onClick={logout}
-            style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}
-          >
-            ออกจากระบบ
-          </button>
+          <Link href="/admin/history" style={{ color: "inherit", textDecoration: "underline" }}>
+            ดูประวัติการหมุน
+          </Link>
         </p>
       </div>
 
@@ -266,12 +224,13 @@ export default function AdminPage() {
                 <div className="field">
                   <label>โอกาส (%)</label>
                   <input
-                    type="number"
+                    type="text"
                     inputMode="numeric"
-                    min={1}
-                    max={100}
-                    value={p.weight}
+                    pattern="[0-9]*"
+                    maxLength={3}
+                    value={p.weight === 0 ? "" : p.weight}
                     onChange={(e) => updateField(i, "weight", e.target.value)}
+                    onBlur={() => commitWeight(i)}
                   />
                 </div>
               </div>
@@ -293,9 +252,9 @@ export default function AdminPage() {
           รีเซ็ตกลับค่าเริ่มต้น
         </button>
       </div>
-      <p className={"saved-note" + (savedNote ? " show" : "")} role="status" aria-live="polite">
+      <div className={"toast" + (savedNote ? " show" : "")} role="status" aria-live="polite">
         {savedNote}
-      </p>
+      </div>
     </main>
   );
 }
