@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { DEFAULTS, PALETTE, Prize, PrizeColor, normalizePrizes, renderWheel, weightSum } from "@/lib/wheel-shared";
 
 export default function AdminPage() {
-  const router = useRouter();
+  const [authed, setAuthed] = useState<boolean | null>(null); // null = still checking
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+
   const [draft, setDraft] = useState<Prize[]>([]);
   const [loading, setLoading] = useState(true);
   const [storeNote, setStoreNote] = useState("");
@@ -21,35 +24,56 @@ export default function AdminPage() {
     );
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/prizes", { cache: "no-store" });
-        if (res.status === 401) {
-          router.replace("/admin/login?next=/admin");
-          return;
-        }
-        const data = await res.json();
-        if (cancelled) return;
-        setDraft(data.prizes ?? []);
-        setStoreNote(
-          data.source === "supabase"
-            ? "เชื่อมต่อ Supabase แล้ว การแก้ไขจะเห็นตรงกันทุกเครื่อง"
-            : "ยังไม่ได้ตั้งค่า Supabase (หรือยังไม่มีข้อมูล) — บันทึกจะไม่ถูกเก็บถาวร"
-        );
-      } finally {
-        if (!cancelled) setLoading(false);
+  const loadPrizes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/prizes", { cache: "no-store" });
+      if (res.status === 401) {
+        setAuthed(false);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+      const data = await res.json();
+      setAuthed(true);
+      setDraft(data.prizes ?? []);
+      setStoreNote(
+        data.source === "supabase"
+          ? "เชื่อมต่อ Supabase แล้ว การแก้ไขจะเห็นตรงกันทุกเครื่อง"
+          : "ยังไม่ได้ตั้งค่า Supabase (หรือยังไม่มีข้อมูล) — บันทึกจะไม่ถูกเก็บถาวร"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    redrawPreview(draft);
-  }, [draft, redrawPreview]);
+    loadPrizes();
+  }, [loadPrizes]);
+
+  useEffect(() => {
+    if (authed) redrawPreview(draft);
+  }, [authed, draft, redrawPreview]);
+
+  async function submitLogin(e: FormEvent) {
+    e.preventDefault();
+    setLoginBusy(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setLoginError(data.error || "เข้าสู่ระบบไม่สำเร็จ");
+        return;
+      }
+      setPassword("");
+      await loadPrizes();
+    } finally {
+      setLoginBusy(false);
+    }
+  }
 
   function updateField(i: number, key: keyof Prize, value: string) {
     setDraft((prev) => {
@@ -105,7 +129,7 @@ export default function AdminPage() {
         body: JSON.stringify({ prizes: clean }),
       });
       if (res.status === 401) {
-        router.replace("/admin/login?next=/admin");
+        setAuthed(false);
         return;
       }
       const data = await res.json();
@@ -122,13 +146,39 @@ export default function AdminPage() {
 
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.replace("/admin/login");
+    setAuthed(false);
+    setDraft([]);
   }
 
-  if (loading) {
+  if (authed === null || (authed && loading)) {
     return (
       <main className="screen active">
         <p className="sub">กำลังโหลด…</p>
+      </main>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <main className="screen active login-wrap">
+        <h2>เข้าสู่ระบบแก้ไขวงล้อ</h2>
+        <form onSubmit={submitLogin}>
+          <div className="field">
+            <label htmlFor="password">รหัสผ่าน</label>
+            <input
+              id="password"
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          <button className="btn btn-gold" type="submit" disabled={loginBusy || !password} style={{ width: "100%" }}>
+            {loginBusy ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
+          </button>
+          <p className="error">{loginError}</p>
+        </form>
       </main>
     );
   }
