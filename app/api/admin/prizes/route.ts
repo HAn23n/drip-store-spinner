@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasSupabaseConfig, supabaseReadClient, supabaseWriteClient, WHEEL_TABLE } from "@/lib/supabase-admin";
-import { DEFAULTS, normalizePrizes } from "@/lib/wheel-shared";
+import { DEFAULTS, normalizePrizes, weightSum } from "@/lib/wheel-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +37,14 @@ export async function PUT(req: NextRequest) {
   const clean = normalizePrizes(list as Parameters<typeof normalizePrizes>[0]);
   if (clean.length < 2) {
     return NextResponse.json({ error: "ต้องมีอย่างน้อย 2 ช่อง" }, { status: 400 });
+  }
+
+  const total = weightSum(clean);
+  if (total !== 100) {
+    return NextResponse.json(
+      { error: `โอกาสรวมต้องเท่ากับ 100% พอดี (ตอนนี้รวม ${total}%)` },
+      { status: 400 }
+    );
   }
 
   if (!hasSupabaseConfig()) {

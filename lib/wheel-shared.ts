@@ -19,13 +19,16 @@ export const PALETTE: Record<PrizeColor, { hex: string; text: string; name: stri
   leaf: { hex: "#7c9a5e", text: "#211208", name: "เขียวใบไม้" },
 };
 
+// weight is a whole-number percentage (1-100); across all prizes it must sum
+// to exactly 100, so it can be shown to the shop owner directly as "โอกาส %"
+// instead of an abstract relative weight.
 export const DEFAULTS: Prize[] = [
-  { label: "ส่วนลด 5 บาท", description: "หักส่วนลด 5 บาท เมื่อสั่งเครื่องดื่มใดก็ได้", color: "espresso", weight: 22, sort_order: 0 },
-  { label: "น้ำฟรี 1 แก้ว", description: "รับเครื่องดื่มเมนูปกติฟรี 1 แก้ว", color: "gold", weight: 1, sort_order: 1 },
-  { label: "ลดอาหาร 10%", description: "ส่วนลด 10% สำหรับเมนูอาหารในร้าน", color: "espresso", weight: 4, sort_order: 2 },
-  { label: "ฟรีท็อปปิ้ง", description: "เพิ่มท็อปปิ้งฟรี 1 อย่างในเครื่องดื่ม", color: "cherry", weight: 3, sort_order: 3 },
-  { label: "ลด 15 บาท", description: "หักส่วนลด 15 บาท เมื่อสั่งเครื่องดื่มใดก็ได้", color: "espresso", weight: 8, sort_order: 4 },
-  { label: "ลุ้นใหม่รอบหน้า", description: "รอบนี้ยังไม่ถูกรางวัล ลองหมุนอีกครั้งได้เลย", color: "leaf", weight: 2, sort_order: 5 },
+  { label: "ส่วนลด 5 บาท", description: "หักส่วนลด 5 บาท เมื่อสั่งเครื่องดื่มใดก็ได้", color: "espresso", weight: 55, sort_order: 0 },
+  { label: "น้ำฟรี 1 แก้ว", description: "รับเครื่องดื่มเมนูปกติฟรี 1 แก้ว", color: "gold", weight: 3, sort_order: 1 },
+  { label: "ลดอาหาร 10%", description: "ส่วนลด 10% สำหรับเมนูอาหารในร้าน", color: "espresso", weight: 10, sort_order: 2 },
+  { label: "ฟรีท็อปปิ้ง", description: "เพิ่มท็อปปิ้งฟรี 1 อย่างในเครื่องดื่ม", color: "cherry", weight: 7, sort_order: 3 },
+  { label: "ลด 15 บาท", description: "หักส่วนลด 15 บาท เมื่อสั่งเครื่องดื่มใดก็ได้", color: "espresso", weight: 20, sort_order: 4 },
+  { label: "ลุ้นใหม่รอบหน้า", description: "รอบนี้ยังไม่ถูกรางวัล ลองหมุนอีกครั้งได้เลย", color: "leaf", weight: 5, sort_order: 5 },
 ];
 
 export function normalizePrizes(list: Partial<Prize>[]): Prize[] {
@@ -35,9 +38,13 @@ export function normalizePrizes(list: Partial<Prize>[]): Prize[] {
       label: String(p.label).trim().slice(0, 24),
       description: String(p.description ?? "").trim(),
       color: (p.color && PALETTE[p.color as PrizeColor] ? p.color : "espresso") as PrizeColor,
-      weight: Math.max(1, Math.min(999, Math.round(Number(p.weight) || 1))),
+      weight: Math.max(1, Math.min(100, Math.round(Number(p.weight) || 1))),
       sort_order: i,
     }));
+}
+
+export function weightSum(list: Prize[]): number {
+  return list.reduce((s, p) => s + (Number(p.weight) || 0), 0);
 }
 
 // SVG coordinate system (viewBox 300x300), matches the original prototype.

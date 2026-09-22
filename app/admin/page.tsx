@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DEFAULTS, PALETTE, Prize, PrizeColor, normalizePrizes, renderWheel } from "@/lib/wheel-shared";
+import { DEFAULTS, PALETTE, Prize, PrizeColor, normalizePrizes, renderWheel, weightSum } from "@/lib/wheel-shared";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -56,7 +56,7 @@ export default function AdminPage() {
       const next = prev.slice();
       const row = { ...next[i] } as Prize;
       if (key === "weight") {
-        row.weight = Math.max(1, Number(value) || 1);
+        row.weight = Math.max(1, Math.min(100, Number(value) || 1));
       } else if (key === "color") {
         row.color = value as PrizeColor;
       } else if (key === "label") {
@@ -95,6 +95,10 @@ export default function AdminPage() {
         alert("ต้องมีอย่างน้อย 2 ช่อง");
         return;
       }
+      if (weightSum(clean) !== 100) {
+        alert("โอกาสรวมต้องเท่ากับ 100% พอดี");
+        return;
+      }
       const res = await fetch("/api/admin/prizes", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -129,7 +133,8 @@ export default function AdminPage() {
     );
   }
 
-  const total = draft.reduce((s, p) => s + (Number(p.weight) || 1), 0) || 1;
+  const totalPct = weightSum(draft);
+  const totalOk = totalPct === 100;
 
   return (
     <main className="screen active" id="screen-admin">
@@ -144,7 +149,13 @@ export default function AdminPage() {
 
       <div className="admin-head">
         <h2>รายการรางวัล</h2>
-        <p>แก้ชื่อ คำอธิบาย สี และน้ำหนักโอกาสออกได้ ยิ่งน้ำหนักมาก ยิ่งออกบ่อย</p>
+        <p>แก้ชื่อ คำอธิบาย สี และโอกาสออกเป็น % ของแต่ละช่องได้ โอกาสรวมทุกช่องต้องเท่ากับ 100% พอดี</p>
+        <p
+          className="store-note"
+          style={{ color: totalOk ? "var(--leaf)" : "var(--cherry)", opacity: 1, fontWeight: 600 }}
+        >
+          โอกาสรวม {totalPct}% {totalOk ? "✓ ครบ 100%" : totalPct > 100 ? `(เกิน ${totalPct - 100}%)` : `(ขาดอีก ${100 - totalPct}%)`}
+        </p>
         <p className="store-note">
           {storeNote}
           {" · "}
@@ -167,13 +178,12 @@ export default function AdminPage() {
       <div className="rows-grid" id="rows">
         {draft.map((p, i) => {
           const pal = PALETTE[p.color] || PALETTE.espresso;
-          const pct = Math.round(((Number(p.weight) || 1) / total) * 1000) / 10;
           return (
             <div className="row" key={i}>
               <div className="row-top">
                 <span className="swatch" style={{ background: pal.hex }} />
                 <strong>ช่องที่ {i + 1}</strong>
-                <span className="pct">โอกาส {pct}%</span>
+                <span className="pct">โอกาส {p.weight}%</span>
                 <button className="del" aria-label={`ลบช่องที่ ${i + 1}`} onClick={() => deleteRow(i)}>
                   ✕
                 </button>
@@ -202,12 +212,12 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div className="field">
-                  <label>น้ำหนักโอกาส</label>
+                  <label>โอกาส (%)</label>
                   <input
                     type="number"
                     inputMode="numeric"
                     min={1}
-                    max={999}
+                    max={100}
                     value={p.weight}
                     onChange={(e) => updateField(i, "weight", e.target.value)}
                   />
@@ -222,7 +232,7 @@ export default function AdminPage() {
         <button className="btn btn-ghost" onClick={addRow}>
           + เพิ่มช่อง
         </button>
-        <button className="btn btn-gold" onClick={save} disabled={saving}>
+        <button className="btn btn-gold" onClick={save} disabled={saving || !totalOk}>
           {saving ? "กำลังบันทึก…" : "บันทึก"}
         </button>
       </div>
