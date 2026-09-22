@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasSupabaseConfig, supabaseWriteClient, SPIN_HISTORY_TABLE } from "@/lib/supabase-admin";
+import { NO_STORE } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 const PAGE_SIZE = 5;
-const NO_STORE = { headers: { "Cache-Control": "no-store, max-age=0" } };
 
 // Records one completed spin. Called by the wheel page right after a result
 // lands. Both reads and writes for this table go through the service_role

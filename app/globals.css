@@ -135,11 +135,6 @@ textarea{resize:vertical;min-height:58px;line-height:1.7;}
 .pagination .btn{flex:0 0 auto;padding:11px 18px;font-size:14px;}
 .pagination-info{font-size:13px;color:var(--cream-dim);}
 
-.login-wrap{max-width:340px;margin:18vh auto 0;text-align:center;}
-.login-wrap h2{font-family:var(--display);font-weight:600;font-size:22px;margin:0 0 18px;}
-.login-wrap .field{text-align:left;margin-bottom:16px;}
-.login-wrap .error{color:var(--cherry);font-size:13px;margin:10px 0 0;min-height:1.4em;}
-
 @media (min-width:700px){
   :root{ --wrap:600px; }
   body{ padding-top:calc(36px + env(safe-area-inset-top)); }

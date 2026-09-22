@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseConfig, supabaseReadClient, WHEEL_TABLE } from "@/lib/supabase-admin";
 import { DEFAULTS, normalizePrizes } from "@/lib/wheel-shared";
+import { NO_STORE } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
-
-const NO_STORE = { headers: { "Cache-Control": "no-store, max-age=0" } };
 
 // Public: the spin page loads the prize list from here on every visit. Every
 // response explicitly disables caching (belt-and-suspenders on top of

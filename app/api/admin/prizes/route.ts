@@ -1,26 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasSupabaseConfig, supabaseWriteClient, WHEEL_TABLE } from "@/lib/supabase-admin";
+import { hasSupabaseConfig, supabaseReadClient, supabaseWriteClient, WHEEL_TABLE } from "@/lib/supabase-admin";
 import { DEFAULTS, normalizePrizes, weightSum } from "@/lib/wheel-shared";
+import { NO_STORE } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-const NO_STORE = { headers: { "Cache-Control": "no-store, max-age=0" } };
-
+// Reads use the anon client (like app/api/prizes/route.ts) — this is public
+// data anyway, and it keeps read failures (e.g. a missing service_role key)
+// falling back gracefully here too instead of throwing.
 export async function GET() {
   if (!hasSupabaseConfig()) {
     return NextResponse.json({ prizes: normalizePrizes(DEFAULTS), source: "fallback" }, NO_STORE);
   }
-  const { data, error } = await supabaseWriteClient()
-    .from(WHEEL_TABLE)
-    .select("*")
-    .order("sort_order", { ascending: true });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502, ...NO_STORE });
+  try {
+    const { data, error } = await supabaseReadClient()
+      .from(WHEEL_TABLE)
+      .select("*")
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    const prizes = data && data.length > 0 ? normalizePrizes(data) : normalizePrizes(DEFAULTS);
+    return NextResponse.json({ prizes, source: data && data.length > 0 ? "supabase" : "fallback" }, NO_STORE);
+  } catch (err) {
+    return NextResponse.json(
+      { error: (err as Error).message, prizes: normalizePrizes(DEFAULTS), source: "fallback" },
+      NO_STORE
+    );
   }
-  const prizes = data && data.length > 0 ? normalizePrizes(data) : normalizePrizes(DEFAULTS);
-  return NextResponse.json({ prizes, source: data && data.length > 0 ? "supabase" : "fallback" }, NO_STORE);
 }
 
 export async function PUT(req: NextRequest) {

@@ -60,13 +60,16 @@ export default function AdminPage() {
       const next = prev.slice();
       const row = { ...next[i] } as Prize;
       if (key === "weight") {
-        // Keep only digits and let the field go empty (weight 0) while the
-        // owner is mid-typing — don't force it back to 1 on every keystroke,
-        // that's what made clearing the field to type a new number fight back.
-        // The 1-100 floor/ceiling and rebalance only run once they leave the
+        // Keep only digits and a decimal point (so a pasted "12.5" rounds to
+        // 13 instead of the dot getting stripped and gluing the digits into
+        // "125"), and let the field go empty (weight 0) while the owner is
+        // mid-typing — don't force it back to 1 on every keystroke, that's
+        // what made clearing the field to type a new number fight back. The
+        // 1-100 floor/ceiling and rebalance only run once they leave the
         // field, in commitWeight below.
-        const digits = value.replace(/[^0-9]/g, "").slice(0, 3);
-        row.weight = digits === "" ? 0 : Math.min(999, parseInt(digits, 10));
+        const filtered = value.replace(/[^0-9.]/g, "").slice(0, 6);
+        const num = filtered === "" || filtered === "." ? 0 : parseFloat(filtered);
+        row.weight = Number.isFinite(num) ? Math.min(999, Math.round(num)) : 0;
       } else if (key === "color") {
         row.color = value as PrizeColor;
       } else if (key === "label") {
@@ -225,9 +228,9 @@ export default function AdminPage() {
                   <label>โอกาส (%)</label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={3}
+                    inputMode="decimal"
+                    pattern="[0-9.]*"
+                    maxLength={6}
                     value={p.weight === 0 ? "" : p.weight}
                     onChange={(e) => updateField(i, "weight", e.target.value)}
                     onBlur={() => commitWeight(i)}

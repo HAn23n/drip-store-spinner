@@ -25,10 +25,11 @@ create policy "wheel_prizes_public_read"
   using (true);
 
 -- Intentionally no insert/update/delete policy for anon/authenticated roles.
--- Writes only happen through the Next.js API routes (app/api/admin/prizes),
--- which authenticate the shop owner's password and use the service_role key
--- that bypasses RLS. This is what stops anyone from writing straight to the
--- table with just the public anon key.
+-- Writes only happen through the Next.js API route (app/api/admin/prizes),
+-- which uses the service_role key that bypasses RLS. This is what stops
+-- anyone from writing straight to the table with just the public anon key —
+-- the API route itself has no password/login check (removed by request), so
+-- anyone who knows the /admin URL can still write through it.
 
 -- Seed data — safe to run once; skipped if the table already has rows.
 insert into public.wheel_prizes (label, description, color, weight, sort_order)
