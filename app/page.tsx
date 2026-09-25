@@ -141,10 +141,22 @@ export default function WheelPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/prizes", { cache: "no-store" });
-        const data = await res.json();
+        const [prizesRes, spinsRes] = await Promise.all([
+          fetch("/api/prizes", { cache: "no-store" }),
+          // Seed the "หมุนไปแล้ว X ครั้ง" counter from the real cumulative
+          // total (not 0) — it was previously session-local state that reset
+          // on every page load, so it never matched /admin/history's total.
+          fetch("/api/spins?page=1", { cache: "no-store" }).catch(() => null),
+        ]);
+        const data = await prizesRes.json();
         if (cancelled) return;
         setPrizes(data.prizes ?? []);
+        if (spinsRes) {
+          const spinsData = await spinsRes.json().catch(() => null);
+          if (!cancelled && spinsData && typeof spinsData.total === "number") {
+            setSpinCount(spinsData.total);
+          }
+        }
       } finally {
         if (!cancelled) {
           setBtnDisabled(false);

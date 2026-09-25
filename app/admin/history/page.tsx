@@ -24,7 +24,6 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(5);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -43,30 +42,6 @@ export default function HistoryPage() {
   useEffect(() => {
     load(1);
   }, [load]);
-
-  async function exportExcel() {
-    setExporting(true);
-    try {
-      const res = await fetch("/api/spins/export");
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "ส่งออกไม่สำเร็จ");
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `spin-history-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      alert("ส่งออกไม่สำเร็จ: " + (err as Error).message);
-    } finally {
-      setExporting(false);
-    }
-  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -87,9 +62,19 @@ export default function HistoryPage() {
       </div>
 
       <div className="admin-actions" style={{ marginBottom: 18 }}>
-        <button className="btn btn-ghost" onClick={exportExcel} disabled={exporting || total === 0}>
-          {exporting ? "กำลังส่งออก…" : "ส่งออกเป็น Excel"}
-        </button>
+        {total === 0 ? (
+          <button className="btn btn-ghost" disabled>
+            ส่งออกเป็น Excel
+          </button>
+        ) : (
+          // A plain link (not fetch+blob+programmatic click) so the browser's
+          // native download handling takes it — the JS-triggered blob-click
+          // pattern silently fails to download on iOS Safari and several
+          // Android in-app browsers.
+          <a className="btn btn-ghost" href="/api/spins/export" download={`spin-history-${new Date().toISOString().slice(0, 10)}.xlsx`}>
+            ส่งออกเป็น Excel
+          </a>
+        )}
       </div>
 
       {loading ? (
