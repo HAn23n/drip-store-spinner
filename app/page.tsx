@@ -242,7 +242,7 @@ export default function WheelPage() {
           <g id="wheelGroup" ref={wheelGroupRef} />
         </svg>
         <div className="hub" aria-hidden="true">
-          ☕️
+          <img src="/logo-mark.png" alt="" className="hub-logo" />
         </div>
       </div>
 
