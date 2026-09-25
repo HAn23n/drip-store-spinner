@@ -68,6 +68,7 @@ svg#wheel #wheelGroup text{font-family:var(--body);paint-order:stroke;}
 .btn-gold:disabled{background:var(--line);color:var(--cream-dim);box-shadow:none;cursor:default;transform:none;}
 .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--cream);font-size:14.5px;padding:12px 22px;}
 .btn-ghost:hover{background:rgba(246,236,220,.06);}
+.btn-disabled{opacity:.5;pointer-events:none;cursor:default;}
 
 .spin-area{text-align:center;}
 .count{margin-top:14px;font-size:13px;color:var(--cream-dim);}

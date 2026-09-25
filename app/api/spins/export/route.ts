@@ -1,32 +1,12 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { hasSupabaseConfig, supabaseWriteClient, SPIN_HISTORY_TABLE } from "@/lib/supabase-admin";
+import { bangkokDateStamp } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Downloads the full spin history as an .xlsx file.
-export async function GET() {
-  if (!hasSupabaseConfig()) {
-    return NextResponse.json({ error: "Supabase ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์นี้" }, { status: 503 });
-  }
-
-  const { data, error } = await supabaseWriteClient()
-    .from(SPIN_HISTORY_TABLE)
-    .select("label, description, spun_at")
-    .order("spun_at", { ascending: false })
-    .limit(10000);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 502 });
-  }
-
-  const rows = (data ?? []).map((r) => ({
-    "รางวัลที่ได้": r.label,
-    "รายละเอียด": r.description,
-    "วันเวลาที่หมุน": new Date(r.spun_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }),
-  }));
-
+function xlsxResponse(rows: Record<string, string>[]) {
   const worksheet = XLSX.utils.json_to_sheet(rows);
   worksheet["!cols"] = [{ wch: 22 }, { wch: 40 }, { wch: 22 }];
   const workbook = XLSX.utils.book_new();
@@ -36,8 +16,38 @@ export async function GET() {
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="spin-history-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+      "Content-Disposition": `attachment; filename="spin-history-${bangkokDateStamp()}.xlsx"`,
       "Cache-Control": "no-store, max-age=0",
     },
   });
+}
+
+// Downloads the full spin history as an .xlsx file. Always returns a real
+// .xlsx (status 200), even on failure — the page links straight to this URL
+// as a plain <a href download> (required for the download to work on mobile
+// Safari/in-app browsers), which can't inspect an HTTP status code before
+// saving. So an error has to be reported *inside* a valid spreadsheet the
+// admin can actually open, not as a JSON body with a 5xx status.
+export async function GET() {
+  if (!hasSupabaseConfig()) {
+    return xlsxResponse([{ "ข้อผิดพลาด": "Supabase ยังไม่ได้ตั้งค่าบนเซิร์ฟเวอร์นี้ — ลองใหม่อีกครั้งภายหลัง" }]);
+  }
+
+  const { data, error } = await supabaseWriteClient()
+    .from(SPIN_HISTORY_TABLE)
+    .select("label, description, spun_at")
+    .order("spun_at", { ascending: false })
+    .limit(10000);
+
+  if (error) {
+    return xlsxResponse([{ "ข้อผิดพลาด": "ดึงข้อมูลไม่สำเร็จ: " + error.message + " — ลองใหม่อีกครั้ง" }]);
+  }
+
+  const rows = (data ?? []).map((r) => ({
+    "รางวัลที่ได้": r.label,
+    "รายละเอียด": r.description,
+    "วันเวลาที่หมุน": new Date(r.spun_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }),
+  }));
+
+  return xlsxResponse(rows);
 }

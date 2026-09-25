@@ -29,6 +29,7 @@ export default function WheelPage() {
   const modalCloseRef = useRef<HTMLButtonElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const spinBtnRef = useRef<HTMLButtonElement | null>(null);
+  const hasSpunRef = useRef(false);
 
   useEffect(() => {
     prizesRef.current = prizes;
@@ -50,6 +51,7 @@ export default function WheelPage() {
   }
 
   const finish = useCallback((idx: number) => {
+    hasSpunRef.current = true;
     setSpinCount((c) => c + 1);
     setBtnDisabled(false);
     setBtnLabel("หมุนวงล้อ");
@@ -141,27 +143,42 @@ export default function WheelPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [prizesRes, spinsRes] = await Promise.all([
-          fetch("/api/prizes", { cache: "no-store" }),
-          // Seed the "หมุนไปแล้ว X ครั้ง" counter from the real cumulative
-          // total (not 0) — it was previously session-local state that reset
-          // on every page load, so it never matched /admin/history's total.
-          fetch("/api/spins?page=1", { cache: "no-store" }).catch(() => null),
-        ]);
-        const data = await prizesRes.json();
+        const res = await fetch("/api/prizes", { cache: "no-store" });
+        const data = await res.json();
         if (cancelled) return;
         setPrizes(data.prizes ?? []);
-        if (spinsRes) {
-          const spinsData = await spinsRes.json().catch(() => null);
-          if (!cancelled && spinsData && typeof spinsData.total === "number") {
-            setSpinCount(spinsData.total);
-          }
-        }
       } finally {
         if (!cancelled) {
           setBtnDisabled(false);
           setBtnLabel("หมุนวงล้อ");
         }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Seeds the "หมุนไปแล้ว X ครั้ง" counter from the real cumulative total
+  // (it used to be session-local state that always started at 0, so it never
+  // matched /admin/history's total). Kept as its own effect, independent of
+  // the prizes fetch above, so a slow/failed count fetch never delays the
+  // spin button becoming clickable — spinning doesn't need this value at all.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/spins/count", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.total === "number") {
+          // Never let this stale-by-the-time-it-resolves seed clobber a count
+          // that's already been incremented by a spin completing in the
+          // meantime — only apply it if nothing's happened yet this session.
+          setSpinCount((c) => (hasSpunRef.current ? c : data.total));
+        }
+      } catch {
+        // Best-effort — the counter just stays at whatever it already was.
       }
     })();
     return () => {
@@ -231,7 +248,7 @@ export default function WheelPage() {
         <h1>
           หมุน<em>ลุ้น</em>โชค
         </h1>
-        <p className="sub">กดเพื่อหมุน แล้วแตะอีกครั้งเพื่อหยุดเอง หมุนได้ไม่จำกัด</p>
+        <p className="sub">กดเพื่อหมุน แล้วแตะอีกครั้งเพื่อหยุดเอง</p>
       </div>
 
       <div className="wheel-wrap">
